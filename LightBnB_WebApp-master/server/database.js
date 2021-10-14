@@ -91,14 +91,87 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
  const getAllProperties = (options, limit = 10) => {
+  // explicit because some bug turns value into 20;
+  limit = 10;
+  const queryParams = [];
 
-  return pool
-    .query(`SELECT * 
-      FROM properties
-      LIMIT $1;
-    `, [ limit ])
-    .then((result) => result.rows)
-    .catch((err) => console.log(err.message));
+  let queryString = `
+    SELECT properties.*, avg(property_reviews.rating) as average_rating
+    FROM properties
+    JOIN property_reviews ON properties.id = property_id
+    `;
+
+  // adds WHERE to query based on search input
+  for (const key in options) {
+    if (options[key]) {
+      queryString += `WHERE `;
+      break;
+    }
+  }
+  const and = () => {
+    if (queryParams.length > 0) {
+      queryString += `AND `;
+    }
+  }
+ 
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `city LIKE $${queryParams.length} `;
+  }
+
+  if (options.owner_id){
+    
+    and();
+    queryParams.push(options.owner_id);
+    queryString += `owner_id = $${queryParams.length} `;
+
+  }
+
+  if (options.minimum_price_per_night) {
+
+    and();
+    queryParams.push(options.minimum_price_per_night);
+    queryString += `cost_per_night >= $${queryParams.length} `;
+
+  }
+  if (options.maximum_price_per_night) {
+
+    and();
+    queryParams.push(options.maximum_price_per_night);
+    queryString += `cost_per_night <= $${queryParams.length} `;
+
+  }
+
+  if (options.minimum_rating) {
+
+    and();
+    queryParams.push(options.minimum_rating);
+    queryString += `rating >= $${queryParams.length} `;
+
+  }
+
+
+  console.log('limit', limit);
+  queryParams.push(limit);
+  queryString += `
+    GROUP BY properties.id
+    ORDER BY cost_per_night
+    LIMIT $${queryParams.length};`
+  
+  // return pool
+  //   .query(`SELECT * 
+  //     FROM properties
+  //     LIMIT $1;
+  //   `, [ limit ])
+  //   .then((result) => result.rows)
+  //   .catch((err) => console.log(err.message));
+  console.log(options)
+  console.log(queryParams);
+  console.log(queryString);
+
+  return pool.query(queryString, queryParams)
+  .then(res => res.rows)
+  .catch(err => console.log(err.message));
 
 };
 
